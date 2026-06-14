@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/material.dart' show Offset;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/user.dart';
 import '../models/pet_instance.dart';
@@ -117,6 +118,28 @@ class StorageDB {
       return DateTime.parse(data);
     } catch (e) {
       return null;
+    }
+  }
+
+  // ── 똥 관련 ──
+  static Future<void> savePoops(String userId, List<Offset> poops) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final data = poops.map((p) => '${p.dx},${p.dy}').toList();
+      await prefs.setStringList('poops_$userId', data);
+    } catch (e) {}
+  }
+
+  static Future<List<Offset>> loadPoops(String userId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final data = prefs.getStringList('poops_$userId') ?? [];
+      return data.map((p) {
+        final parts = p.split(',');
+        return Offset(double.parse(parts[0]), double.parse(parts[1]));
+      }).toList();
+    } catch (e) {
+      return [];
     }
   }
 }
