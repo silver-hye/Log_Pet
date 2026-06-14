@@ -1,14 +1,15 @@
-# 1.Introduction 
-매일 글만 적는 단순한 일기는 금방 흥미가 떨어져 작심삼일로 끝나는 경우가 많다. 
+# 1. Introduction
+매일 글만 적는 단순한 일기는 금방 흥미가 떨어져 작심삼일로 끝나는 경우가 많다.
 또한 정서적 교감을 위해 반려동물을 키우고 싶지만 현실적인 조건들 때문에 포기해야 하는 사람들도 흔히 볼 수 있다.
-'LOG-PET'은 스마트폰을 이용해 일기 작성과 디지털 반려동물 육성을 결합함으로써, 
-사용자가 꾸준히 일상을 기록하도록 돕고 정서적인 유대감까지 채워주는 것을 목적으로 한다. 
+'LOG-PET'은 스마트폰을 이용해 일기 작성과 디지털 반려동물 육성을 결합함으로써,
+사용자가 꾸준히 일상을 기록하도록 돕고 정서적인 유대감까지 채워주는 것을 목적으로 한다.
 본 문서는 Analysis(분석)에 이은 Design(설계) 단계의 문서로,
-시스템 구조를 보여주는 class diagram, sequence diagram, state machine diagram을 작성하고 각 다이어그램에 대한 설명을 담고 있다. 
-추가로 본 시스템을 구현하기 위한 소프트웨어 및 하드웨어 요구사항을 함께 기술한다. 
-본 시스템은 ios 운영체제 기반의 스마트폰 환경에서 개발될 예정이다.
+시스템 구조를 보여주는 class diagram, sequence diagram, state machine diagram을 작성하고 각 다이어그램에 대한 설명을 담고 있다.
+추가로 본 시스템을 구현하기 위한 소프트웨어 및 하드웨어 요구사항을 함께 기술한다.
+본 시스템은 Android 및 iOS 운영체제 기반의 스마트폰 환경에서 Flutter(Dart)로 구현되었다.
 
-# 2.Class diagram
+# 2. Class Diagram
+
 ```mermaid
 classDiagram
   direction TB
@@ -93,14 +94,20 @@ classDiagram
     <<Management>>
     +actionType : String
     +statWeight : Int
+    +feedCount : Int
+    +walkCount : Int
+    +washCount : Int
+    +petCount : Int
     +feed()
     +walk()
     +wash()
+    +pet()
     +calcWeight(action : String) : Int
     +updateStatus(stat : String, weight : Int)
     +recordActivityLog(action : String)
     +showAnimation(action : String)
     +showMaxMessage()
+    +checkDailyLimit(action : String) : Boolean
     +backupLogOnCrash()
     +recoverFromLastSave()
   }
@@ -178,6 +185,8 @@ classDiagram
     +loadPetData(userId : String) : Object
     +savePetData(pet : Object) : Boolean
     +loadAllLogs(userId : String) : List
+    +savePoops(userId : String, poops : List)
+    +loadPoops(userId : String) : List
   }
 
   class Independence_Manager {
@@ -220,12 +229,57 @@ classDiagram
     +handleMappingError()
   }
 
+  class Poop_Manager {
+    <<Poop System>>
+    +poops : List
+    +maxPoops : Int
+    +poopTimer : Int
+    +generatePoop(x : Double, y : Double)
+    +removePoop(index : Int)
+    +loadPoops(userId : String)
+    +savePoops(userId : String)
+    +checkMaxLimit() : Boolean
+    +syncOfflinePoops(elapsed : Int)
+  }
+
+  class Mini_Game {
+    <<Game Controller>>
+    +score : Int
+    +highScore : Int
+    +speed : Double
+    +isPlaying : Boolean
+    +species : String
+    +startGame()
+    +jump()
+    +duck()
+    +gameLoop()
+    +generateObstacle()
+    +checkCollision() : Boolean
+    +gameOver()
+    +increaseSpeed()
+  }
+
+  class Sound_Manager {
+    <<Audio Controller>>
+    +bgmVolume : Double
+    +sfxVolume : Double
+    +playBgm()
+    +stopBgm()
+    +playButtonSound()
+    +playFeedSound()
+    +playWashSound()
+    +playHappySound()
+    +playGrowSound()
+    +setVolume(volume : Double)
+  }
+
   Main_Engine --> Registration : controls
   Main_Engine --> Login : controls
   Main_Engine --> Time_Synchronizer : triggers
   Main_Engine --> Growth_Controller : monitors
   Main_Engine --> Pet_Instance : manages
   Main_Engine --> Status_Manager : supervises
+  Main_Engine --> Sound_Manager : controls
 
   Registration --> Storage_DB : saves to
   Registration ..> Login : redirects after success
@@ -238,6 +292,7 @@ classDiagram
   Pet_Instance --> Status_Manager : updates stats
   Pet_Instance --> Activity_Logger : logs events
   Pet_Instance ..> Growth_Controller : monitored by
+  Pet_Instance --> Poop_Manager : triggers poop
 
   Status_Manager --> Status_Monitor : provides data
   Status_Manager --> Growth_Controller : notifies growth ready
@@ -250,6 +305,7 @@ classDiagram
   Interaction_Manager --> Activity_Logger : records action log
   Interaction_Manager --> Storage_DB : saves log data
   Interaction_Manager ..> Pet_Instance : triggers animation
+  Interaction_Manager --> Sound_Manager : plays sound
 
   Diary_Analyzer --> Status_Manager : updates affection and exp
   Diary_Analyzer --> Activity_Logger : saves diary log
@@ -259,10 +315,12 @@ classDiagram
   Growth_Controller --> Pet_Instance : evolves stage
   Growth_Controller --> Storage_DB : saves growth data
   Growth_Controller ..> Activity_Logger : logs growth event
+  Growth_Controller --> Sound_Manager : plays grow sound
 
   Time_Synchronizer --> Storage_DB : reads and writes timestamp
   Time_Synchronizer --> Status_Manager : applies stat decay
   Time_Synchronizer ..> Main_Engine : reports sync result
+  Time_Synchronizer --> Poop_Manager : syncs offline poops
 
   Activity_Logger --> Storage_DB : persists all logs
 
@@ -274,13 +332,18 @@ classDiagram
   World_Server_Linker --> Recall_Generator : provides archived data
   Recall_Generator --> World_Server_Linker : requests activity logs
   Recall_Generator ..> Activity_Logger : references log format
+
+  Poop_Manager --> Storage_DB : saves and loads poops
+  Mini_Game --> Sound_Manager : plays sounds
+  Mini_Game ..> Pet_Instance : uses species
 ```
+
 ---
 
 ## 1) Main_Engine
-> <Logic Controller>
+> <<Logic Controller>>
 
-시스템의 모든 시뮬레이션 과정이 이 클래스를 통해 실행된다. 
+시스템의 모든 시뮬레이션 과정이 이 클래스를 통해 실행된다.
 육성 시스템의 핵심 로직을 담당하며 시간 흐름에 따른 스탯 변화 계산 및 다른 모든 클래스의 Operation을 제어하고 변경한다.
 
 | Attributes | Type | 설명 |
@@ -298,9 +361,9 @@ classDiagram
 ---
 
 ## 2) Registration
-> <Account Creator>
+> <<Account Creator>>
 
-사용자가 시스템을 이용하기 위한 권한을 부여받는 클래스이다. 
+사용자가 시스템을 이용하기 위한 권한을 부여받는 클래스이다.
 아이디와 비밀번호를 입력받아 중복 여부를 확인하며 이 클래스를 통해 생성된 계정 정보만이 Storage_DB에 영구 저장되어 로그인 권한을 얻는다.
 
 | Attributes | Type | 설명 |
@@ -321,7 +384,7 @@ classDiagram
 ---
 
 ## 3) Login
-> <Authenticator>
+> <<Authenticator>>
 
 시스템 접근을 위해 실행해야 하는 클래스이다. 사용자가 입력한 정보와 Storage_DB의 데이터를 대조하여 누구인지 판별하고, 인증 성공 시 해당 사용자의 반려동물 인스턴스를 시스템에 활성화한다.
 
@@ -342,15 +405,16 @@ classDiagram
 ---
 
 ## 4) Pet_Instance
-> <Digital Life Object>
+> <<Digital Life Object>>
 
 반려동물 그 자체를 정의하는 클래스이다. 동물의 이름, 종, 성장 단계 등의 Attribute를 가지며, 주인의 상호작용에 따라 수시로 상태 값이 변경되는 핵심 도메인 모델이다.
+현재 구현에서 지원하는 종은 강아지, 토끼, 고양이, 햄스터 4종이다.
 
 | Attributes | Type | 설명 |
 |---|---|---|
 | +name | String | 반려동물의 이름 |
-| +species | String | 반려동물의 종 (예: 강아지, 고양이) |
-| +growthStage | String | 현재 성장 단계 (Baby / Adult) |
+| +species | String | 반려동물의 종 (강아지 / 토끼 / 고양이 / 햄스터) |
+| +growthStage | String | 현재 성장 단계 (Baby / Adult / Senior) |
 | +registeredAt | DateTime | 반려동물이 등록된 시각 |
 | +appearance | String | 현재 성장 단계에 맞는 외형 리소스 클래스명 |
 
@@ -365,10 +429,11 @@ classDiagram
 ---
 
 ## 5) Status_Manager
-> <Reflection>
+> <<Reflection>>
 
 Interaction_Manager와 Diary_Analyzer의 실행 결과를 실시간으로 스탯에 반영한다.
 Status_Monitor에게는 현재 수치 정보를 주고 Growth_Controller에게는 성장 가능 여부를 알려준다.
+앱 사용 중 1분마다 스탯이 자동으로 감소한다 (배고픔 -3, 청결도 -2, 친밀도 -1).
 
 | Attributes | Type | 설명 |
 |---|---|---|
@@ -393,7 +458,7 @@ Status_Monitor에게는 현재 수치 정보를 주고 Growth_Controller에게�
 ---
 
 ## 6) Status_Monitor
-> <Inquire Status>
+> <<Inquire Status>>
 
 사용자가 반려동물의 현재 욕구 수치(허기, 청결, 친밀도 등)를 알고 싶을 때 정보를 요청하는 클래스이다.
 Status_Manager에 기록된 현재 수치를 시각화하여 사용자에게 공개한다.
@@ -414,34 +479,43 @@ Status_Manager에 기록된 현재 수치를 시각화하여 사용자에게 공
 ---
 
 ## 7) Interaction_Manager
-> <Management>
+> <<Management>>
 
-사용자가 먹이 주기, 산책, 씻기기 등의 명령을 내릴 때 이를 처리하는 클래스이다. 액션에 따른 가중치를 계산하여 Status_Manager에 반영하며, 수행된 모든 활동을 로그로 기록한다.
+사용자가 먹이 주기, 산책, 씻기기, 쓰다듬기 등의 명령을 내릴 때 이를 처리하는 클래스이다.
+액션에 따른 가중치를 계산하여 Status_Manager에 반영하며, 수행된 모든 활동을 로그로 기록한다.
+강아지/토끼는 산책, 고양이/햄스터는 쓰다듬기 액션을 제공한다.
+하루 횟수 제한: 밥주기 2회, 산책 2회, 씻기기 1회, 쓰다듬기 2회.
 
 | Attributes | Type | 설명 |
 |---|---|---|
-| +actionType | String | 현재 수행 중인 상호작용의 종류 (feed / walk / wash) |
+| +actionType | String | 현재 수행 중인 상호작용의 종류 (feed / walk / wash / pet) |
 | +statWeight | Int | 해당 액션이 스탯에 적용하는 증가 가중치 |
+| +feedCount | Int | 오늘 밥주기 횟수 (최대 2회) |
+| +walkCount | Int | 오늘 산책 횟수 (최대 2회) |
+| +washCount | Int | 오늘 씻기기 횟수 (최대 1회) |
+| +petCount | Int | 오늘 쓰다듬기 횟수 (최대 2회) |
 
 | Methods | 설명 |
 |---|---|
 | +feed() | 먹이 주기 액션을 실행하여 배고픔 수치를 증가시킨다 |
-| +walk() | 산책 액션을 실행하여 친밀도 수치를 증가시킨다 |
+| +walk() | 산책 액션을 실행하여 친밀도 수치를 증가시킨다 (강아지/토끼 전용) |
 | +wash() | 씻기기 액션을 실행하여 청결도 수치를 증가시킨다 |
+| +pet() | 쓰다듬기 액션을 실행하여 친밀도 수치를 증가시킨다 (고양이/햄스터 전용) |
 | +calcWeight(action : String) : Int | 선택된 액션에 해당하는 스탯 증가 가중치를 계산한다 |
 | +updateStatus(stat : String, weight : Int) | 계산된 가중치를 Status_Manager에 전달하여 수치를 갱신한다 |
 | +recordActivityLog(action : String) | 수행된 상호작용 내역을 Activity_Logger에 기록한다 |
 | +showAnimation(action : String) | 액션에 맞는 반려동물 애니메이션을 화면에 출력한다 |
 | +showMaxMessage() | 스탯이 이미 최대치일 때 "이미 충분해요!" 메시지를 출력한다 |
+| +checkDailyLimit(action : String) : Boolean | 해당 액션의 하루 횟수 제한 초과 여부를 확인한다 |
 | +backupLogOnCrash() | 비정상 종료 시 종료 직전까지의 로그를 파일로 백업한다 |
 | +recoverFromLastSave() | 재접속 시 마지막 저장 지점부터 데이터를 복구한다 |
 
 ---
 
 ## 8) Diary_Analyzer
-> <Communication Core>
+> <<Communication Core>>
 
-사용자가 입력한 일기 텍스트를 분석하는 클래스이다. 
+사용자가 입력한 일기 텍스트를 분석하는 클래스이다.
 글자 수와 빈도 등을 계산하여 친밀도와 경험치 가중치를 산출하고, 이를 Pet_Instance의 스탯에 반영하도록 요청한다.
 
 | Attributes | Type | 설명 |
@@ -464,21 +538,23 @@ Status_Manager에 기록된 현재 수치를 시각화하여 사용자에게 공
 ---
 
 ## 9) Growth_Controller
-> <Evolution Logic>
+> <<Evolution Logic>>
 
-반려동물의 성장 조건을 판단하고 전이를 수행하는 클래스이다. 경험치와 경과 시간이 기준치에 도달하면 Pet_Instance의 외형 클래스를 아기에서 성체로 변경하고 리소스를 갱신한다.
+반려동물의 성장 조건을 판단하고 전이를 수행하는 클래스이다.
+경험치와 경과 시간이 기준치에 도달하면 Pet_Instance의 외형 클래스를 아기에서 성체로 변경하고 리소스를 갱신한다.
+성장 단계는 Baby → Adult → Senior 3단계로 구성된다.
 
 | Attributes | Type | 설명 |
 |---|---|---|
 | +growthThreshold | Int | 성장 전이에 필요한 최소 경험치 기준값 |
 | +elapsedTime | Int | 반려동물 등록 후 경과된 시간 (분 단위) |
-| +currentStage | String | 현재 반려동물의 성장 단계 (Baby / Adult) |
+| +currentStage | String | 현재 반려동물의 성장 단계 (Baby / Adult / Senior) |
 
 | Methods | 설명 |
 |---|---|
 | +checkGrowthCondition() : Boolean | 경험치와 경과 시간이 성장 임계값에 도달했는지 판단한다 |
 | +evolve() | 성장 조건 충족 시 성장 전이 전체 프로세스를 실행한다 |
-| +replaceClass(from : String, to : String) | 현재 클래스(Baby)를 다음 단계 클래스(Adult)로 교체한다 |
+| +replaceClass(from : String, to : String) | 현재 클래스를 다음 단계 클래스로 교체한다 |
 | +loadNewResource(stage : String) | 새로운 성장 단계에 맞는 이미지·애니메이션 리소스를 로드한다 |
 | +showEvolutionEffect() | 성장 완료 시 효과음·이펙트 등 진화 연출을 화면에 출력한다 |
 | +saveGrowthData() | 갱신된 성장 단계 정보를 Storage_DB에 영구 저장한다 |
@@ -488,10 +564,11 @@ Status_Manager에 기록된 현재 수치를 시각화하여 사용자에게 공
 ---
 
 ## 10) Time_Synchronizer
-> <Data Integrity>
+> <<Data Integrity>>
 
 외부 Time Server와 통신하여 시간 정합성을 맞추는 클래스이다.
 접속 시 표준 시간을 가져와 Storage_DB에 기록된 마지막 접속 시간과의 차이를 계산하고 부재 중 손실된 스탯을 산출한다.
+오프라인 상태에서 쌓인 똥도 경과 시간에 따라 계산하여 반영한다.
 
 | Attributes | Type | 설명 |
 |---|---|---|
@@ -515,7 +592,7 @@ Status_Manager에 기록된 현재 수치를 시각화하여 사용자에게 공
 ---
 
 ## 11) Activity_Logger
-> <Log Recorder>
+> <<Log Recorder>>
 
 시스템 내에서 발생하는 모든 상호작용 및 일기 내용을 기록하는 클래스이다.
 이 정보는 추후 동물이 독립했을 때 Recall_Generator를 통해 회상 대화를 생성하기 위한 기초 데이터가 된다.
@@ -538,10 +615,11 @@ Status_Manager에 기록된 현재 수치를 시각화하여 사용자에게 공
 ---
 
 ## 12) Storage_DB
-> <File System Wrapper>
+> <<File System Wrapper>>
 
-가상 서버의 데이터베이스 역할을 수행하는 클래스이다. 
-모든 사용자 계정, 반려동물 스탯, 활동 로그를 텍스트 파일 형태로 저장하고 읽어오는 기능을 담당한다.
+가상 서버의 데이터베이스 역할을 수행하는 클래스이다.
+모든 사용자 계정, 반려동물 스탯, 활동 로그, 똥 위치 데이터를 저장하고 읽어오는 기능을 담당한다.
+Flutter 구현에서는 SharedPreferences를 활용하여 웹/앱 양쪽에서 동작한다.
 
 | Attributes | Type | 설명 |
 |---|---|---|
@@ -549,21 +627,23 @@ Status_Manager에 기록된 현재 수치를 시각화하여 사용자에게 공
 
 | Methods | 설명 |
 |---|---|
-| +saveData(key : String, value : String) : Boolean | 키-값 쌍으로 데이터를 파일에 저장한다 |
-| +loadData(key : String) : String | 키에 해당하는 데이터를 파일에서 읽어온다 |
-| +deleteData(key : String) : Boolean | 키에 해당하는 데이터를 파일에서 삭제한다 |
+| +saveData(key : String, value : String) : Boolean | 키-값 쌍으로 데이터를 저장한다 |
+| +loadData(key : String) : String | 키에 해당하는 데이터를 읽어온다 |
+| +deleteData(key : String) : Boolean | 키에 해당하는 데이터를 삭제한다 |
 | +updateData(key : String, value : String) : Boolean | 기존 키의 값을 새로운 값으로 갱신한다 |
-| +checkDuplicate(userId : String) : Boolean | 동일한 아이디가 이미 존재하는지 전수 조사한다 |
-| +loadTimestamp() : DateTime | 마지막 접속 시각 데이터를 파일에서 불러온다 |
-| +saveTimestamp(time : DateTime) | 현재 접속 시각을 파일에 기록한다 |
+| +checkDuplicate(userId : String) : Boolean | 동일한 아이디가 이미 존재하는지 확인한다 |
+| +loadTimestamp() : DateTime | 마지막 접속 시각 데이터를 불러온다 |
+| +saveTimestamp(time : DateTime) | 현재 접속 시각을 기록한다 |
 | +loadPetData(userId : String) : Object | 해당 사용자의 반려동물 전체 데이터를 불러온다 |
-| +savePetData(pet : Object) : Boolean | 반려동물 데이터를 파일에 저장한다 |
+| +savePetData(pet : Object) : Boolean | 반려동물 데이터를 저장한다 |
 | +loadAllLogs(userId : String) : List | 해당 사용자의 전체 활동 로그를 불러온다 |
+| +savePoops(userId : String, poops : List) | 현재 똥 위치 목록을 저장한다 |
+| +loadPoops(userId : String) : List | 저장된 똥 위치 목록을 불러온다 |
 
 ---
 
 ## 13) Independence_Manager
-> <Releasement>
+> <<Releasement>>
 
 최종 성장한 동물을 시스템에서 해방시키는 과정을 관리하는 클래스이다.
 로컬 데이터를 정리하고 모든 기록을 World_Server_Linker로 전송하기 위한 패키징 작업을 수행한다.
@@ -579,7 +659,7 @@ Status_Manager에 기록된 현재 수치를 시각화하여 사용자에게 공
 | +transferToWorldServer(data : Object) : Boolean | 패키징된 데이터를 World_Server_Linker로 전송한다 |
 | +clearLocalData(userId : String) | Storage_DB에서 해당 반려동물의 로컬 데이터를 삭제한다 |
 | +setReadOnly(userId : String) | 삭제 대신 로컬 데이터를 읽기 전용으로 변경한다 |
-| +showEndingScene() | 독립을 기념하는 엔딩 연출(편지·회상 영상 등)을 출력한다 |
+| +showEndingScene() | 독립을 기념하는 엔딩 연출을 출력한다 |
 | +showServerErrorMessage() | 서버 전송 실패 시 오류 메시지를 출력한다 |
 | +retryOnReconnect() | 네트워크 복구 시 전송을 자동으로 재시도한다 |
 | +invalidateServerData() | 로컬 삭제 오류 발생 시 서버로 전송된 데이터를 무효화한다 |
@@ -587,9 +667,9 @@ Status_Manager에 기록된 현재 수치를 시각화하여 사용자에게 공
 ---
 
 ## 14) World_Server_Linker
-> <External Archive>
+> <<External Archive>>
 
-독립한 동물들의 데이터를 영구 보존하는 가상 서버 연결 클래스이다. 
+독립한 동물들의 데이터를 영구 보존하는 가상 서버 연결 클래스이다.
 Independence_Manager로부터 받은 데이터를 저장하고 추후 추억 회상 시 Recall_Generator에게 데이터를 다시 제공한다.
 
 | Attributes | Type | 설명 |
@@ -609,7 +689,7 @@ Independence_Manager로부터 받은 데이터를 저장하고 추후 추억 회
 ---
 
 ## 15) Recall_Generator
-> <Memory Recovery>
+> <<Memory Recovery>>
 
 사용자가 독립한 동물과 재회할 때 실행되는 클래스이다.
 World_Server_Linker를 통해 과거 Activity_Logger에 기록된 내용을 무작위로 추출하여 대사 템플릿에 주입하고 회상 대화를 화면에 출력한다.
@@ -630,12 +710,90 @@ World_Server_Linker를 통해 과거 Activity_Logger에 기록된 내용을 무�
 | +activateRetryButton() | 로딩이 5초를 초과할 경우 재시도 버튼을 활성화한다 |
 | +handleMappingError() | 템플릿 매핑 오류 시 범용 인사말로 대체하여 출력한다 |
 
-# 3.squence diagram
 ---
+
+## 16) Poop_Manager *(신규)*
+> <<Poop System>>
+
+반려동물이 일정 시간마다 똥을 싸는 시스템을 관리하는 클래스이다.
+앱이 켜져 있을 때는 30초마다, 앱이 꺼진 상태에서는 오프라인 경과 시간에 따라 똥이 쌓인다.
+최대 5개까지만 쌓이며 사용자가 터치하면 사라진다.
+
+| Attributes | Type | 설명 |
+|---|---|---|
+| +poops | List | 현재 화면에 존재하는 똥의 위치 목록 |
+| +maxPoops | Int | 화면에 존재할 수 있는 최대 똥 개수 (5개) |
+| +poopTimer | Int | 똥 생성 타이머 (600 프레임 = 약 30초마다 생성) |
+
+| Methods | 설명 |
+|---|---|
+| +generatePoop(x : Double, y : Double) | 현재 반려동물 위치에 똥을 생성한다 |
+| +removePoop(index : Int) | 터치된 똥을 목록에서 제거하고 반려동물이 웃게 한다 |
+| +loadPoops(userId : String) | Storage_DB에서 저장된 똥 위치를 불러온다 |
+| +savePoops(userId : String) | 현재 똥 위치 목록을 Storage_DB에 저장한다 |
+| +checkMaxLimit() : Boolean | 현재 똥 개수가 최대치(5개)에 도달했는지 확인한다 |
+| +syncOfflinePoops(elapsed : Int) | 오프라인 경과 시간에 따라 똥 개수를 계산하여 반영한다 |
+
+---
+
+## 17) Mini_Game *(신규)*
+> <<Game Controller>>
+
+반려동물이 주인공인 장애물 점프 미니게임을 관리하는 클래스이다.
+사용자는 탭으로 점프, 길게 누르기로 숙이기를 수행하며 낮은 장애물(선인장)은 점프로, 높은 장애물(독수리)은 숙이기로 피해야 한다.
+점수가 오를수록 속도가 빨라진다.
+
+| Attributes | Type | 설명 |
+|---|---|---|
+| +score | Int | 현재 게임 점수 |
+| +highScore | Int | 최고 기록 점수 |
+| +speed | Double | 현재 장애물 이동 속도 (점수에 비례하여 증가) |
+| +isPlaying | Boolean | 현재 게임 진행 여부 |
+| +species | String | 게임에서 사용할 반려동물 종 |
+
+| Methods | 설명 |
+|---|---|
+| +startGame() | 게임을 초기화하고 시작한다 |
+| +jump() | 반려동물을 위로 점프시킨다 |
+| +duck() | 반려동물을 아래로 숙이게 한다 |
+| +gameLoop() | 매 프레임마다 게임 상태를 갱신한다 (중력, 이동, 충돌) |
+| +generateObstacle() | 낮은 장애물 또는 높은 장애물을 무작위로 생성한다 |
+| +checkCollision() : Boolean | 반려동물과 장애물의 충돌 여부를 판단한다 |
+| +gameOver() | 충돌 감지 시 게임을 종료하고 최고 기록을 갱신한다 |
+| +increaseSpeed() | 점수 증가에 따라 게임 속도를 점진적으로 높인다 |
+
+---
+
+## 18) Sound_Manager *(신규)*
+> <<Audio Controller>>
+
+앱 전반의 효과음과 배경음악을 관리하는 클래스이다.
+배경음악은 무한 반복 재생되며 볼륨 조절이 가능하다.
+각 액션(먹이주기, 씻기기, 산책 등)마다 고유한 효과음이 재생된다.
+
+| Attributes | Type | 설명 |
+|---|---|---|
+| +bgmVolume | Double | 배경음악 볼륨 (0.0 ~ 1.0) |
+| +sfxVolume | Double | 효과음 볼륨 (0.0 ~ 1.0) |
+
+| Methods | 설명 |
+|---|---|
+| +playBgm() | 배경음악을 무한 반복 재생한다 |
+| +stopBgm() | 배경음악을 정지한다 |
+| +playButtonSound() | 버튼 클릭 효과음을 재생한다 |
+| +playFeedSound() | 먹이 주기 효과음을 재생한다 |
+| +playWashSound() | 씻기기 효과음을 재생한다 (3초 후 자동 정지) |
+| +playHappySound() | 산책/쓰다듬기/일기 작성 효과음을 재생한다 |
+| +playGrowSound() | 성장 완료 효과음을 재생한다 |
+| +setVolume(volume : Double) | 배경음악 볼륨을 조절한다 |
+
+---
+
+# 3. Sequence Diagram
 
 ## 1) Registration — 회원가입
 
-사용자가 회원가입 양식을 작성하면 Registration이 Storage_DB에 중복 여부를 확인하고 이상이 없으면 계정을 저장한 뒤 Login 화면으로 이동한다. 
+사용자가 회원가입 양식을 작성하면 Registration이 Storage_DB에 중복 여부를 확인하고 이상이 없으면 계정을 저장한 뒤 Login 화면으로 이동한다.
 중복 또는 양식 오류 시 해당 오류 메시지를 즉시 반환한다.
 
 ```mermaid
@@ -665,7 +823,7 @@ sequenceDiagram
 
 ## 2) Login — 로그인
 
-사용자가 아이디와 비밀번호를 입력하면 Login이 Storage_DB에서 레코드를 조회하고 비밀번호를 대조한다. 
+사용자가 아이디와 비밀번호를 입력하면 Login이 Storage_DB에서 레코드를 조회하고 비밀번호를 대조한다.
 인증 성공 시 Pet_Instance를 로드하고 Main_Engine을 활성화하며 실패 시 오류 메시지를 출력한다.
 
 ```mermaid
@@ -694,8 +852,8 @@ sequenceDiagram
 
 ## 3) Pet_Instance — 반려동물 등록
 
-로그인 후 반려동물이 없을 경우 사용자는 종과 이름을 선택한다. 
-Pet_Instance가 생성되어 기본 스탯이 할당되고 Storage_DB에 저장된다. 
+로그인 후 반려동물이 없을 경우 사용자는 종(강아지/토끼/고양이/햄스터)과 이름을 선택한다.
+Pet_Instance가 생성되어 기본 스탯이 할당되고 Storage_DB에 저장된다.
 이름 미입력 또는 형식 오류 시 재입력을 요구한다.
 
 ```mermaid
@@ -705,7 +863,7 @@ sequenceDiagram
   participant DB as Storage_DB
   participant M as Main_Engine
 
-  User->>P: 종 선택 + 이름 입력 후 [등록 완료] 클릭
+  User->>P: 종 선택(강아지/토끼/고양이/햄스터) + 이름 입력 후 [등록 완료] 클릭
   alt 이름 미입력 또는 형식 오류
     P-->>User: 경고 메시지 출력 후 재입력 요구
   else 정상 입력
@@ -723,7 +881,7 @@ sequenceDiagram
 ## 4) Time_Synchronizer — 데이터 동기
 
 로그인 완료 직후 자동 실행된다.
-Time Server에서 현재 시각을 받아 마지막 접속 시각과 비교하고 경과 시간만큼 스탯을 차감한다. 
+Time Server에서 현재 시각을 받아 마지막 접속 시각과 비교하고 경과 시간만큼 스탯을 차감한다.
 네트워크 불안정 시 로컬 시간을 대체 사용하며 시간 조작이 감지되면 차감을 중단한다.
 
 ```mermaid
@@ -792,8 +950,8 @@ sequenceDiagram
 
 ## 6) Interaction_Manager — 육성 관리
 
-사용자가 먹이,산책,씻기기 버튼을 클릭하면 해당 액션의 가중치를 계산하여 Status_Manager를 갱신하고 Activity_Logger에 기록한다. 
-스탯이 이미 최대치면 수치 변경 없이 메시지만 출력한다.
+사용자가 먹이/산책/씻기기/쓰다듬기 버튼을 클릭하면 하루 횟수 제한을 확인한 뒤 해당 액션의 가중치를 계산하여 Status_Manager를 갱신하고 Activity_Logger에 기록한다.
+스탯이 이미 최대치거나 횟수 제한 초과 시 메시지만 출력한다.
 
 ```mermaid
 sequenceDiagram
@@ -803,18 +961,23 @@ sequenceDiagram
   participant AL as Activity_Logger
   participant DB as Storage_DB
 
-  User->>IM: 먹이/산책/씻기기 버튼 클릭
-  IM->>SM: getCurrentStats()
-  SM-->>IM: 현재 스탯 반환
-  alt 스탯 이미 최대(100)
-    IM-->>User: showMaxMessage(이미 충분해요!)
-  else 정상
-    IM->>IM: calcWeight(actionType)
-    IM->>SM: updateStat(stat, weight)
-    SM-->>IM: 갱신 완료
-    IM->>AL: createLog(action, timestamp)
-    AL->>DB: saveLog()
-    IM-->>User: showAnimation(action)
+  User->>IM: 먹이/산책/씻기기/쓰다듬기 버튼 클릭
+  IM->>IM: checkDailyLimit(action)
+  alt 횟수 제한 초과
+    IM-->>User: 오늘은 더 이상 할 수 없어요 메시지
+  else 제한 미만
+    IM->>SM: getCurrentStats()
+    SM-->>IM: 현재 스탯 반환
+    alt 스탯 이미 최대(100)
+      IM-->>User: showMaxMessage(이미 충분해요!)
+    else 정상
+      IM->>IM: calcWeight(actionType)
+      IM->>SM: updateStat(stat, weight)
+      SM-->>IM: 갱신 완료
+      IM->>AL: createLog(action, timestamp)
+      AL->>DB: saveLog()
+      IM-->>User: showAnimation(action)
+    end
   end
 ```
 
@@ -822,8 +985,8 @@ sequenceDiagram
 
 ## 7) Diary_Analyzer — 일기 작성 및 교감
 
-사용자가 일기를 작성하면 텍스트 길이와 감정 키워드를 분석하여 경험치,친밀도 가중치를 산출한다. 
-산출된 수치를 Status_Manager에 반영하고 일기를 Activity_Logger에 저장한다. 
+사용자가 일기를 작성하면 텍스트 길이와 감정 키워드를 분석하여 경험치·친밀도 가중치를 산출한다.
+산출된 수치를 Status_Manager에 반영하고 일기를 Activity_Logger에 저장한다.
 텍스트가 너무 짧으면 가이드 메시지를 출력한다.
 
 ```mermaid
@@ -856,9 +1019,9 @@ sequenceDiagram
 
 ## 8) Growth_Controller — 성장 처리
 
-스탯 갱신 시마다 경험치와 경과 시간이 성장 임계값에 도달했는지 자동으로 체크한다. 
-조건 충족 시 Pet_Instance의 외형 클래스를 성체로 교체하고 새 리소스를 로드한 뒤 진화 연출을 출력한다. 
-저장 오류 시 롤백한다.
+스탯 갱신 시마다 경험치와 경과 시간이 성장 임계값에 도달했는지 자동으로 체크한다.
+조건 충족 시 Pet_Instance의 외형 클래스를 다음 단계로 교체하고 새 리소스를 로드한 뒤 진화 연출을 출력한다.
+성장 단계는 Baby → Adult → Senior 3단계이며 저장 오류 시 롤백한다.
 
 ```mermaid
 sequenceDiagram
@@ -874,10 +1037,10 @@ sequenceDiagram
   alt 조건 미충족
     GC-->>M: 현재 단계 유지
   else 조건 충족
-    GC->>P: replaceClass(Baby → Adult)
-    GC->>P: loadNewResource(Adult)
+    GC->>P: replaceClass(현재 → 다음 단계)
+    GC->>P: loadNewResource(다음 단계)
     alt 리소스 오류
-      GC->>P: 기본 성체 리소스 할당
+      GC->>P: 기본 리소스 할당
     else 정상
       GC->>DB: saveGrowthData()
       alt DB 저장 오류
@@ -893,8 +1056,8 @@ sequenceDiagram
 
 ## 9) Status_Manager — 스탯 반영
 
-Interaction_Manager 또는 Diary_Analyzer로부터 수치 변경 요청을 받아 스탯을 즉시 갱신한다. 
-최소,최대값을 초과하지 않도록 고정하고 Status_Monitor와 Growth_Controller에 변경 사실을 알린다.
+Interaction_Manager 또는 Diary_Analyzer로부터 수치 변경 요청을 받아 스탯을 즉시 갱신한다.
+최소·최대값을 초과하지 않도록 고정하고 Status_Monitor와 Growth_Controller에 변경 사실을 알린다.
 
 ```mermaid
 sequenceDiagram
@@ -923,8 +1086,8 @@ sequenceDiagram
 
 ## 10) Activity_Logger — 활동 로그 기록
 
-상호작용·일기 작성 등 시스템 내 모든 이벤트를 로그로 생성하여 Storage_DB에 저장한다. 
-비정상 종료 시 즉시 백업하고 처리 시 전체 로그를 패키징하여 Independence_Manager에 전달한다.
+상호작용·일기 작성 등 시스템 내 모든 이벤트를 로그로 생성하여 Storage_DB에 저장한다.
+비정상 종료 시 즉시 백업하며 독립 처리 시 전체 로그를 패키징하여 Independence_Manager에 전달한다.
 
 ```mermaid
 sequenceDiagram
@@ -954,7 +1117,9 @@ sequenceDiagram
 
 ## 11) Storage_DB — 데이터 저장·조회
 
-시스템의 모든 영구 데이터를 텍스트 파일 형태로 관리한다. 각 클래스로부터 읽기,쓰기,삭제,갱신 요청을 받아 처리하고 결과를 반환한다.
+시스템의 모든 영구 데이터를 관리한다.
+각 클래스로부터 읽기·쓰기·삭제·갱신 요청을 받아 처리하고 결과를 반환한다.
+Flutter 구현에서는 SharedPreferences를 사용하여 웹/앱 환경 모두에서 동작한다.
 
 ```mermaid
 sequenceDiagram
@@ -1005,7 +1170,7 @@ sequenceDiagram
 
 ## 13) Independence_Manager — 동물 독립
 
-최종 성장을 마친 반려동물의 독립을 처리한다. 
+최종 성장을 마친 반려동물의 독립을 처리한다.
 모든 활동 로그를 패키징하여 World_Server_Linker로 전송하고 성공 시 로컬 데이터를 삭제하거나 읽기 전용으로 변경한 뒤 엔딩 연출을 출력한다.
 
 ```mermaid
@@ -1035,7 +1200,7 @@ sequenceDiagram
 
 ## 14) World_Server_Linker — 외부 아카이브
 
-Independence_Manager로부터 반려동물 데이터를 수신하여 영구 기억 저장소에 보관한다. 
+Independence_Manager로부터 반려동물 데이터를 수신하여 영구 기억 저장소에 보관한다.
 추억 회상 시 Recall_Generator의 요청에 따라 해당 동물의 활동 로그를 다시 제공한다.
 
 ```mermaid
@@ -1084,13 +1249,124 @@ sequenceDiagram
     end
   end
 ```
+
+---
+
+## 16) Poop_Manager — 똥 시스템 *(신규)*
+
+반려동물이 30초마다 똥을 싸며 최대 5개까지 쌓인다.
+앱이 꺼진 상태에서도 경과 시간에 따라 똥이 쌓이며 사용자가 터치하면 사라지고 반려동물이 웃는다.
+
+```mermaid
+sequenceDiagram
+  actor User
+  participant P as Pet_Instance
+  participant PM as Poop_Manager
+  participant DB as Storage_DB
+  participant T as Time_Synchronizer
+
+  loop 앱 사용 중 30초마다
+    P->>PM: 똥 생성 요청
+    PM->>PM: checkMaxLimit()
+    alt 최대 5개 미만
+      PM->>PM: generatePoop(petX, petY)
+      PM->>DB: savePoops(userId)
+    else 최대 도달
+      PM-->>P: 생성 중단
+    end
+  end
+
+  note over T,PM: 앱 재접속 시
+  T->>PM: syncOfflinePoops(elapsed)
+  PM->>DB: loadPoops(userId)
+  DB-->>PM: 저장된 똥 목록 반환
+
+  User->>PM: 똥 터치
+  PM->>PM: removePoop(index)
+  PM->>DB: savePoops(userId)
+  PM-->>User: 반려동물 웃음 표시
+```
+
+---
+
+## 17) Mini_Game — 미니게임 *(신규)*
+
+사용자가 키우는 반려동물이 주인공인 장애물 피하기 게임이다.
+탭으로 점프, 길게 누르기로 숙이기를 수행하며 점수가 오를수록 속도가 빨라진다.
+
+```mermaid
+sequenceDiagram
+  actor User
+  participant MG as Mini_Game
+  participant SM as Sound_Manager
+
+  User->>MG: 화면 탭 (게임 시작)
+  MG->>MG: startGame()
+  loop 게임 진행 중
+    MG->>MG: gameLoop()
+    MG->>MG: generateObstacle()
+    alt 낮은 장애물 (선인장)
+      MG-->>User: 점프! 힌트 표시
+      User->>MG: 탭 (점프)
+      MG->>MG: jump()
+    else 높은 장애물 (독수리)
+      MG-->>User: 숙여! 힌트 표시
+      User->>MG: 길게 누르기 (숙이기)
+      MG->>MG: duck()
+    end
+    MG->>MG: checkCollision()
+    alt 충돌 발생
+      MG->>MG: gameOver()
+      MG->>SM: playWashSound()
+      MG-->>User: 게임 오버 화면 출력
+    else 통과
+      MG->>MG: increaseSpeed()
+    end
+  end
+```
+
+---
+
+## 18) Sound_Manager — 사운드 관리 *(신규)*
+
+앱 전반의 배경음악과 효과음을 관리한다.
+배경음악은 메인 화면 진입 시 자동으로 시작되고 무한 반복된다.
+볼륨 조절 슬라이더로 0~100% 사이에서 조절 가능하다.
+
+```mermaid
+sequenceDiagram
+  participant M as Main_Engine
+  participant SM as Sound_Manager
+  participant IM as Interaction_Manager
+  actor User
+
+  M->>SM: playBgm()
+  SM-->>User: 배경음악 무한 반복 재생
+
+  User->>M: 볼륨 조절 슬라이더 변경
+  M->>SM: setVolume(value)
+  SM-->>User: 볼륨 즉시 반영
+
+  IM->>SM: playFeedSound()
+  SM-->>User: 먹이 주기 효과음 재생
+
+  IM->>SM: playWashSound()
+  SM-->>User: 씻기기 효과음 재생 (3초 후 자동 정지)
+
+  IM->>SM: playHappySound()
+  SM-->>User: 산책/쓰다듬기 효과음 재생
+```
+
+---
+
 # 4. State Machine Diagram
 
 시스템 실행 시 Login 화면으로 시작하며 회원가입 버튼을 누를 시 Register 화면으로 이동한다.
-회원가입이 성공하면 다시 Login 화면으로, 실패하면 Register 화면에 남아있게 된다. 
+회원가입이 성공하면 다시 Login 화면으로, 실패하면 Register 화면에 남아있게 된다.
 로그인 성공 시 MainView로 넘어가며, 반려동물이 없을 경우 PetRegister 화면으로 이동한다.
 등록 완료 후 NurturingView에서 일기 작성, 육성 관리, 성장 처리를 반복하고,
 최종 성장 후 독립 처리 또는 추억 회상으로 전이된다. 로그아웃 시 다시 Login으로 돌아간다.
+NurturingView에서는 🎮 버튼을 통해 미니게임으로 진입할 수 있다.
 
 ---
 
@@ -1136,7 +1412,9 @@ stateDiagram-v2
     DiaryWrite --> DiaryWrite : Save Fail
     ShowNurturing --> Interaction : Action button click
     Interaction --> ShowNurturing : Action Complete
-    Interaction --> Interaction : Stat already max
+    Interaction --> Interaction : Stat already max or Daily limit reached
+    ShowNurturing --> MiniGame : 🎮 button click
+    MiniGame --> ShowNurturing : Game Over or Back
   }
 
   NurturingView --> Baby : EXP accumulated
@@ -1211,7 +1489,7 @@ stateDiagram-v2
 ---
 
 ### 5. PetRegister — 반려동물 등록
-**진입 동작**: 반려동물 종 선택 및 이름 입력 화면을 출력한다.
+**진입 동작**: 반려동물 종 선택(강아지/토끼/고양이/햄스터) 및 이름 입력 화면을 출력한다.
 
 | 전이 조건 | 이동 상태 |
 |---|---|
@@ -1221,18 +1499,20 @@ stateDiagram-v2
 ---
 
 ### 6. NurturingView — 육성 화면
-**진입 동작**: 반려동물의 현재 스탯 게이지와 상호작용 버튼을 출력한다.
+**진입 동작**: 반려동물이 화면을 자유롭게 돌아다니며 스탯 게이지와 상호작용 버튼을 출력한다.
+강아지/토끼는 산책 버튼, 고양이/햄스터는 쓰다듬기 버튼이 표시된다.
 
 | 전이 조건 | 이동 상태 |
 |---|---|
 | Diary button click | DiaryWrite |
-| Action button click (먹이/산책/씻기기) | Interaction |
+| Action button click (먹이/씻기/산책 또는 쓰다듬기) | Interaction |
+| 🎮 button click | MiniGame |
 | EXP accumulated (경험치 누적) | GrowthCheck (Baby 단계 시작) |
 
 ---
 
 ### 7. DiaryWrite — 일기 작성
-**진입 동작**: 일기 텍스트 입력 폼을 화면에 출력한다.
+**진입 동작**: 오늘 날짜와 함께 일기 텍스트 입력 폼을 화면에 출력한다.
 
 | 전이 조건 | 이동 상태 |
 |---|---|
@@ -1242,16 +1522,28 @@ stateDiagram-v2
 ---
 
 ### 8. Interaction — 육성 상호작용
-**진입 동작**: 선택된 액션(먹이/산책/씻기기)의 가중치를 계산하고 스탯을 갱신한다.
+**진입 동작**: 선택된 액션의 가중치를 계산하고 스탯을 갱신한다.
 
 | 전이 조건 | 이동 상태 |
 |---|---|
 | Action Complete | NurturingView |
 | Stat already max (스탯 최대치) | Interaction (자기 자신, 메시지 출력) |
+| Daily limit reached (하루 횟수 초과) | Interaction (자기 자신, 메시지 출력) |
 
 ---
 
-### 9. GrowthCheck — 성장 단계 (Baby → Adult → Senior)
+### 9. MiniGame — 미니게임 *(신규)*
+**진입 동작**: 키우는 반려동물이 주인공인 장애물 피하기 게임을 시작한다.
+탭으로 점프, 길게 누르기로 숙이기를 수행하며 점수에 따라 속도가 증가한다.
+
+| 전이 조건 | 이동 상태 |
+|---|---|
+| Game Over | MiniGame (자기 자신, 재시작 대기) |
+| Back button | NurturingView |
+
+---
+
+### 10. GrowthCheck — 성장 단계 (Baby → Adult → Senior)
 **진입 동작**: 경험치와 경과 시간이 임계값에 도달할 때마다 다음 단계로 자동 전이된다.
 
 | 현재 상태 | 전이 조건 | 이동 상태 |
@@ -1262,7 +1554,7 @@ stateDiagram-v2
 
 ---
 
-### 10. Independence — 동물 독립
+### 11. Independence — 동물 독립
 **진입 동작**: 반려동물의 전체 데이터를 패키징하여 World Server로 전송한다.
 
 | 전이 조건 | 이동 상태 |
@@ -1272,8 +1564,9 @@ stateDiagram-v2
 
 ---
 
-### 11. RecallView — 추억 보기
+### 12. RecallView — 추억 보기
 **진입 동작**: World Server에서 독립한 반려동물의 활동 로그를 불러온다.
+전체 일기 목록을 펼쳐보거나 다른 추억을 랜덤으로 불러올 수 있다.
 
 | 전이 조건 | 이동 상태 |
 |---|---|
@@ -1281,38 +1574,57 @@ stateDiagram-v2
 
 ---
 
-### 12. RecallMessage — 추억 메시지 출력
-**진입 동작**: 랜덤 추출된 과거 로그를 대사 템플릿에 주입하여 회상 대화를 출력한다.
+### 13. RecallMessage — 추억 메시지 출력
+**진입 동작**: 랜덤 추출된 과거 로그를 대사 템플릿에 주입하여 회상 대화를 날짜와 함께 출력한다.
 
 | 전이 조건 | 이동 상태 |
 |---|---|
 | View another memory | RecallView |
 | exit | 종료점 [*] |
 
+---
 
 # 5. Implementation Requirements
 
 ## 5.1 H/W Platform Requirements
 
-| Device | iPhone 8 이상 |
-| CPU | Apple A11 Bionic 이상 |
+| 항목 | 요구 사양 |
+|---|---|
+| Device | Android 6.0 이상 스마트폰 또는 iPhone 8 이상 |
+| CPU | 1.5GHz 이상 |
 | RAM | 2GB 이상 |
-| Storage | 500MB 이상의 여유 공간 |
+| Storage | 200MB 이상의 여유 공간 |
 
 ## 5.2 S/W Platform Requirements
 
-| OS | iOS 15.0 이상 |
-| 네트워크 | Time Server 및 World Server 연동을 위한 인터넷 연결 권장 (오프라인 부분 동작 가능) |
+| 항목 | 요구 사양 |
+|---|---|
+| Android OS | Android 6.0 (API Level 23) 이상 |
+| iOS | iOS 15.0 이상 |
+| 개발 언어 | Dart (Flutter 3.44.2) |
+| 개발 환경 | VS Code + Flutter SDK |
+| 데이터 저장 | SharedPreferences (로컬) |
+| 오디오 | audioplayers 패키지 |
+| 네트워크 | Time Server 연동을 위한 인터넷 연결 권장 (오프라인 부분 동작 가능) |
+
+---
 
 # 6. Glossary
 
+| Term | Description |
+|---|---|
 | 메타데이터 | 데이터에 관한 구조화된 데이터 |
 | 콜백함수 | 다른 함수의 인자로써 이용되는 함수 |
-| 다형성 | 객체 지향 프로그래밍에서 동일한 인터페이스로 다양한 타입의 객체를 처리할 수 있는 특성 |
+| 다형성 | 객체 지향 프로그래밍에서 동일한 인터페이스로 다양한 타입의 객체를 처리할 수 있는 특성. 성장 단계 전이 시 활용된다 |
 | 롤백 | 오류 발생 시 트랜잭션을 이전 상태로 되돌리는 복구 처리 |
 | Sequence Diagram | 객체 간의 동적 상호작용을 시간적 개념으로 모델링하여 나타낸 다이어그램 |
 | State Machine Diagram | 객체 LifeTime 동안 변화될 수 있는 모든 상태를 정의해둔 다이어그램 |
+| SharedPreferences | Flutter에서 키-값 형태로 데이터를 로컬 저장하는 패키지. 웹과 앱 모두에서 동작한다 |
+| 똥 시스템 | 반려동물이 일정 시간마다 똥을 싸는 기능. 최대 5개까지 쌓이며 터치 시 제거된다 |
+| 미니게임 | 키우는 반려동물이 주인공인 장애물 점프 게임. 점프와 숙이기로 장애물을 피한다 |
+| 하루 횟수 제한 | 밥주기 2회, 산책 2회, 씻기기 1회, 쓰다듬기 2회로 하루 상호작용 횟수를 제한한다 |
 
+---
 
 # 7. References
 
@@ -1320,6 +1632,20 @@ stateDiagram-v2
 
 - 강의자료 : Structural Modeling I, II
 - 강의자료 : Behavior Modeling I, II
+
+## 공식 문서
+
+- Flutter 공식 문서  
+  https://flutter.dev/docs
+
+- Dart 공식 문서  
+  https://dart.dev/guides
+
+- audioplayers 패키지  
+  https://pub.dev/packages/audioplayers
+
+- shared_preferences 패키지  
+  https://pub.dev/packages/shared_preferences
 
 ## 다이어그램 작성 참고
 
@@ -1348,3 +1674,4 @@ stateDiagram-v2
 
 - UML Specification — Class Diagram  
   https://www.uml-diagrams.org/class-diagrams-overview.html
+
