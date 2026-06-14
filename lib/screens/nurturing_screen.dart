@@ -37,8 +37,8 @@ class _NurturingScreenState extends State<NurturingScreen>
   int _petCount = 0;
 
   // 동물 위치
-  double _petX = 150;
-  double _petY = 300;
+  double _petX = 100;
+  double _petY = 100;
   double _petDX = 2;
   double _petDY = 1.5;
   bool _petLookingRight = true;
@@ -63,6 +63,20 @@ class _NurturingScreenState extends State<NurturingScreen>
       duration: const Duration(milliseconds: 50),
     )..addListener(_movePet);
     _moveController.repeat();
+
+    // 스탯 감소 시작
+    Future.delayed(const Duration(minutes: 1), _decayStats);
+  }
+
+  void _decayStats() {
+    if (!mounted) return;
+    setState(() {
+      _pet.updateStat('hunger', -3);
+      _pet.updateStat('cleanliness', -2);
+      _pet.updateStat('affection', -1);
+    });
+    StorageDB.savePet(widget.userId, _pet);
+    Future.delayed(const Duration(minutes: 1), _decayStats);
   }
 
   void _movePet() {
@@ -71,12 +85,11 @@ class _NurturingScreenState extends State<NurturingScreen>
       _petX += _petDX;
       _petY += _petDY;
 
-      // 화면 경계 반사
-      if (_petX < 0 || _petX > 280) {
+      if (_petX < 0 || _petX > 300) {
         _petDX = -_petDX;
         _petLookingRight = _petDX > 0;
       }
-      if (_petY < 0 || _petY > 400) {
+      if (_petY < 0 || _petY > 150) {
         _petDY = -_petDY;
       }
 
@@ -238,6 +251,7 @@ class _NurturingScreenState extends State<NurturingScreen>
   }
 
   String _getPetEmoji() {
+    if (_showSmile) return '😊';
     switch (_pet.species) {
       case '강아지': return '🐶';
       case '토끼': return '🐰';
@@ -250,15 +264,15 @@ class _NurturingScreenState extends State<NurturingScreen>
   List<Map<String, dynamic>> _getActions() {
     if (_pet.species == '강아지' || _pet.species == '토끼') {
       return [
-        {'emoji': '🍖', 'label': '먹이주기\n($_feedCount/2)', 'action': 'feed'},
-        {'emoji': '🛁', 'label': '씻기기\n($_washCount/1)', 'action': 'wash'},
+        {'emoji': '🍖', 'label': '먹이\n($_feedCount/2)', 'action': 'feed'},
+        {'emoji': '🛁', 'label': '씻기\n($_washCount/1)', 'action': 'wash'},
         {'emoji': '🦮', 'label': '산책\n($_walkCount/2)', 'action': 'walk'},
       ];
     } else {
       return [
-        {'emoji': '🍖', 'label': '먹이주기\n($_feedCount/2)', 'action': 'feed'},
-        {'emoji': '🛁', 'label': '씻기기\n($_washCount/1)', 'action': 'wash'},
-        {'emoji': '🤚', 'label': '쓰다듬기\n($_petCount/2)', 'action': 'pet'},
+        {'emoji': '🍖', 'label': '먹이\n($_feedCount/2)', 'action': 'feed'},
+        {'emoji': '🛁', 'label': '씻기\n($_washCount/1)', 'action': 'wash'},
+        {'emoji': '🤚', 'label': '쓰다듬\n($_petCount/2)', 'action': 'pet'},
       ];
     }
   }
@@ -285,10 +299,7 @@ class _NurturingScreenState extends State<NurturingScreen>
                 children: [
                   const Text(
                     '어떤 친구를 키울까요?',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 24),
                   DropdownButton<String>(
@@ -309,10 +320,8 @@ class _NurturingScreenState extends State<NurturingScreen>
                   if (_message.isNotEmpty)
                     Padding(
                       padding: const EdgeInsets.only(top: 8),
-                      child: Text(
-                        _message,
-                        style: const TextStyle(color: Colors.red),
-                      ),
+                      child: Text(_message,
+                          style: const TextStyle(color: Colors.red)),
                     ),
                   const SizedBox(height: 24),
                   SizedBox(
@@ -340,7 +349,10 @@ class _NurturingScreenState extends State<NurturingScreen>
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (_) => MiniGameScreen(userId: widget.userId),
+                  builder: (_) => MiniGameScreen(
+                    userId: widget.userId,
+                    species: _pet.species,
+                  ),
                 ),
               );
             },
@@ -349,52 +361,51 @@ class _NurturingScreenState extends State<NurturingScreen>
       ),
       body: Column(
         children: [
-          // 스탯 바
-          Padding(
-            padding: const EdgeInsets.all(12),
+          // 스탯 바 (작게)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
             child: Column(
               children: [
-                _buildStatRow('배고픔', _pet.hunger),
-                _buildStatRow('청결도', _pet.cleanliness),
-                _buildStatRow('친밀도', _pet.affection),
-                _buildStatRow('경험치', _pet.exp.clamp(0, 100)),
+                _buildStatRow('🍖', _pet.hunger),
+                _buildStatRow('🛁', _pet.cleanliness),
+                _buildStatRow('💕', _pet.affection),
+                _buildStatRow('⭐', _pet.exp.clamp(0, 100)),
               ],
             ),
           ),
           // 메시지
           if (_message.isNotEmpty)
             Container(
-              margin: const EdgeInsets.symmetric(horizontal: 12),
-              padding: const EdgeInsets.all(8),
+              margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+              padding: const EdgeInsets.all(6),
               decoration: BoxDecoration(
                 color: Colors.purple[50],
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(8),
               ),
               child: Text(
                 _message,
                 textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.purple),
+                style: const TextStyle(color: Colors.purple, fontSize: 13),
               ),
             ),
           // 동물 움직임 영역
           Expanded(
             child: Stack(
               children: [
-                // 배경
                 Container(
                   decoration: BoxDecoration(
                     color: Colors.green[50],
-                    borderRadius: BorderRadius.circular(12),
                   ),
                 ),
                 // 똥들
                 ..._poops.asMap().entries.map((entry) {
                   return Positioned(
-                    left: entry.value.dx,
-                    top: entry.value.dy,
+                    left: entry.value.dx.clamp(0, 300),
+                    top: entry.value.dy.clamp(0, 150),
                     child: GestureDetector(
                       onTap: () => _onTapPoop(entry.key),
-                      child: const Text('💩', style: TextStyle(fontSize: 24)),
+                      child: const Text('💩',
+                          style: TextStyle(fontSize: 24)),
                     ),
                   );
                 }),
@@ -407,7 +418,7 @@ class _NurturingScreenState extends State<NurturingScreen>
                     child: Transform.flip(
                       flipX: !_petLookingRight,
                       child: Text(
-                        _showSmile ? '😊' : _getPetEmoji(),
+                        _getPetEmoji(),
                         style: const TextStyle(fontSize: 40),
                       ),
                     ),
@@ -417,8 +428,8 @@ class _NurturingScreenState extends State<NurturingScreen>
             ),
           ),
           // 액션 버튼
-          Padding(
-            padding: const EdgeInsets.all(16),
+          Container(
+            padding: const EdgeInsets.all(8),
             child: Column(
               children: [
                 Row(
@@ -431,7 +442,7 @@ class _NurturingScreenState extends State<NurturingScreen>
                           ))
                       .toList(),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 8),
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
@@ -460,20 +471,27 @@ class _NurturingScreenState extends State<NurturingScreen>
     );
   }
 
-  Widget _buildStatRow(String label, int value) {
+  Widget _buildStatRow(String emoji, int value) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
+      padding: const EdgeInsets.symmetric(vertical: 1),
       child: Row(
         children: [
-          SizedBox(width: 60, child: Text(label, style: const TextStyle(fontSize: 12))),
+          Text(emoji, style: const TextStyle(fontSize: 14)),
+          const SizedBox(width: 4),
           Expanded(
             child: LinearProgressIndicator(
               value: value / 100,
               color: value < 30 ? Colors.red : Colors.green,
               backgroundColor: Colors.grey[300],
+              minHeight: 8,
             ),
           ),
-          SizedBox(width: 30, child: Text('$value', style: const TextStyle(fontSize: 12))),
+          const SizedBox(width: 4),
+          SizedBox(
+            width: 28,
+            child: Text('$value',
+                style: const TextStyle(fontSize: 11)),
+          ),
         ],
       ),
     );
@@ -484,8 +502,10 @@ class _NurturingScreenState extends State<NurturingScreen>
       onTap: onTap,
       child: Column(
         children: [
-          Text(emoji, style: const TextStyle(fontSize: 32)),
-          Text(label, textAlign: TextAlign.center, style: const TextStyle(fontSize: 11)),
+          Text(emoji, style: const TextStyle(fontSize: 30)),
+          Text(label,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 10)),
         ],
       ),
     );

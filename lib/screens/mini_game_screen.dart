@@ -3,7 +3,13 @@ import 'package:audioplayers/audioplayers.dart';
 
 class MiniGameScreen extends StatefulWidget {
   final String userId;
-  const MiniGameScreen({super.key, required this.userId});
+  final String species;
+
+  const MiniGameScreen({
+    super.key,
+    required this.userId,
+    required this.species,
+  });
 
   @override
   State<MiniGameScreen> createState() => _MiniGameScreenState();
@@ -13,24 +19,25 @@ class _MiniGameScreenState extends State<MiniGameScreen>
     with TickerProviderStateMixin {
   final AudioPlayer _audioPlayer = AudioPlayer();
 
-  // 게임 상태
   bool _isPlaying = false;
   bool _isGameOver = false;
   int _score = 0;
   int _highScore = 0;
 
-  // 강아지 위치
-  double _dogY = 0;
-  double _dogVelocity = 0;
+  // 동물 상태
+  double _petY = 0;
+  double _petVelocity = 0;
+  bool _isDucking = false;
   bool _isJumping = false;
   final double _gravity = 0.8;
   final double _jumpForce = -15;
   final double _groundY = 0;
 
-  // 장애물
-  double _obstacleX = 400;
-  double _obstacleHeight = 40;
+  // 장애물 목록
+  List<Map<String, dynamic>> _obstacles = [];
   double _speed = 5;
+  int _frameCount = 0;
+  int _nextObstacleIn = 60;
 
   late AnimationController _gameController;
 
@@ -43,59 +50,127 @@ class _MiniGameScreenState extends State<MiniGameScreen>
     )..addListener(_gameLoop);
   }
 
+  String _getPetEmoji() {
+    if (_isDucking) {
+      switch (widget.species) {
+        case '강아지': return '🐕';
+        case '토끼': return '🐇';
+        case '고양이': return '🙀';
+        case '햄스터': return '🐹';
+        default: return '🐾';
+      }
+    }
+    switch (widget.species) {
+      case '강아지': return '🐶';
+      case '토끼': return '🐰';
+      case '고양이': return '🐱';
+      case '햄스터': return '🐹';
+      default: return '🐾';
+    }
+  }
+
   void _startGame() {
     setState(() {
       _isPlaying = true;
       _isGameOver = false;
       _score = 0;
-      _dogY = _groundY;
-      _dogVelocity = 0;
-      _obstacleX = 400;
+      _petY = _groundY;
+      _petVelocity = 0;
+      _isDucking = false;
+      _isJumping = false;
+      _obstacles = [];
       _speed = 5;
+      _frameCount = 0;
+      _nextObstacleIn = 60;
     });
     _gameController.repeat();
   }
 
   void _jump() {
-    if (!_isPlaying) return;
-    if (_dogY >= _groundY) {
+    if (!_isPlaying || _isDucking) return;
+    if (_petY >= _groundY) {
       setState(() {
-        _dogVelocity = _jumpForce;
+        _petVelocity = _jumpForce;
         _isJumping = true;
       });
       _audioPlayer.play(AssetSource('sounds/happy.mp3'));
     }
   }
 
+  void _duck() {
+    if (!_isPlaying) return;
+    if (_petY >= _groundY) {
+      setState(() => _isDucking = true);
+    }
+  }
+
+  void _standUp() {
+    setState(() => _isDucking = false);
+  }
+
   void _gameLoop() {
     if (!_isPlaying || _isGameOver) return;
 
     setState(() {
-      // 중력 적용
-      _dogVelocity += _gravity;
-      _dogY += _dogVelocity;
+      _frameCount++;
 
-      // 바닥 충돌
-      if (_dogY >= _groundY) {
-        _dogY = _groundY;
-        _dogVelocity = 0;
+      // 중력
+      if (!_isDucking) {
+        _petVelocity += _gravity;
+        _petY += _petVelocity;
+      }
+
+      if (_petY >= _groundY) {
+        _petY = _groundY;
+        _petVelocity = 0;
         _isJumping = false;
       }
 
-      // 장애물 이동
-      _obstacleX -= _speed;
+      // 장애물 생성
+      if (_frameCount >= _nextObstacleIn) {
+        _frameCount = 0;
+        // 랜덤 장애물 (점프/숙이기)
+        final isHigh = _score % 3 == 2; // 3번째마다 높은 장애물
+        _obstacles.add({
+          'x': 420.0,
+          'type': isHigh ? 'high' : 'low', // high=숙이기, low=점프
+        });
+        // 다음 장애물 간격 (점수 오를수록 짧아짐)
+        _nextObstacleIn = (80 - _score * 2).clamp(30, 80);
+      }
 
-      // 장애물 재생성
-      if (_obstacleX < -30) {
-        _obstacleX = 400;
+      // 장애물 이동
+      for (var obs in _obstacles) {
+        obs['x'] = (obs['x'] as double) - _speed;
+      }
+      _obstacles.removeWhere((obs) => (obs['x'] as double) < -30);
+
+      // 점수
+      if (_frameCount == 0) {
         _score++;
-        // 점수마다 속도 증가
-        _speed = 5 + (_score * 0.3);
+        _speed = 5 + (_score * 0.2);
       }
 
       // 충돌 감지
-      if (_obstacleX < 80 && _obstacleX > 20 && _dogY > -_obstacleHeight + 20) {
-        _gameOver();
+      for (var obs in _obstacles) {
+        final ox = obs['x'] as double;
+        final isHigh = obs['type'] == 'high';
+
+        if (ox < 80 && ox > 20) {
+          if (isHigh) {
+            // 높은 장애물 — 숙여야 통과
+            if (!_isDucking) {
+              _gameOver();
+              return;
+            }
+          } else {
+            // 낮은 장애물 — 점프해야 통과
+            if (_petY >= _groundY) {
+              _gameOver();
+              return;
+            }
+          }
+        }
       }
     });
   }
@@ -104,9 +179,7 @@ class _MiniGameScreenState extends State<MiniGameScreen>
     _isGameOver = true;
     _isPlaying = false;
     _gameController.stop();
-    if (_score > _highScore) {
-      _highScore = _score;
-    }
+    if (_score > _highScore) _highScore = _score;
     _audioPlayer.play(AssetSource('sounds/wash.mp3'));
   }
 
@@ -131,17 +204,33 @@ class _MiniGameScreenState extends State<MiniGameScreen>
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
-                  Text('점수: $_score', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                  Text('최고: $_highScore', style: const TextStyle(fontSize: 20, color: Colors.purple)),
+                  Text('점수: $_score',
+                      style: const TextStyle(
+                          fontSize: 20, fontWeight: FontWeight.bold)),
+                  Text('최고: $_highScore',
+                      style: const TextStyle(
+                          fontSize: 20, color: Colors.purple)),
                 ],
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 8),
+              // 조작 안내
+              const Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  Text('⬆️ 탭 = 점프', style: TextStyle(fontSize: 13)),
+                  Text('⬇️ 길게 누르기 = 숙이기',
+                      style: TextStyle(fontSize: 13)),
+                ],
+              ),
+              const SizedBox(height: 8),
               // 게임 화면
               GestureDetector(
                 onTap: _isPlaying ? _jump : _startGame,
+                onLongPressStart: (_) => _duck(),
+                onLongPressEnd: (_) => _standUp(),
                 child: Container(
                   width: 400,
-                  height: 200,
+                  height: 220,
                   decoration: BoxDecoration(
                     color: Colors.lightBlue[50],
                     borderRadius: BorderRadius.circular(12),
@@ -149,7 +238,7 @@ class _MiniGameScreenState extends State<MiniGameScreen>
                   ),
                   child: Stack(
                     children: [
-                      // 하늘
+                      // 구름
                       const Positioned(
                         top: 20,
                         left: 50,
@@ -162,7 +251,7 @@ class _MiniGameScreenState extends State<MiniGameScreen>
                       ),
                       // 바닥선
                       Positioned(
-                        bottom: 40,
+                        bottom: 45,
                         left: 0,
                         right: 0,
                         child: Container(
@@ -170,29 +259,49 @@ class _MiniGameScreenState extends State<MiniGameScreen>
                           color: Colors.green[700],
                         ),
                       ),
-                      // 강아지
+                      // 동물
                       Positioned(
                         left: 40,
-                        bottom: 40 - _dogY,
+                        bottom: _isDucking ? 45 : 45 - _petY,
                         child: Text(
-                          _isJumping ? '🐶' : '🐕',
-                          style: const TextStyle(fontSize: 36),
-                        ),
-                      ),
-                      // 장애물
-                      Positioned(
-                        left: _obstacleX,
-                        bottom: 40,
-                        child: Container(
-                          width: 20,
-                          height: _obstacleHeight,
-                          decoration: BoxDecoration(
-                            color: Colors.green[700],
-                            borderRadius: BorderRadius.circular(4),
+                          _getPetEmoji(),
+                          style: TextStyle(
+                            fontSize: _isDucking ? 24 : 36,
                           ),
-                          child: const Text('🌵', style: TextStyle(fontSize: 20)),
                         ),
                       ),
+                      // 장애물들
+                      ..._obstacles.map((obs) {
+                        final isHigh = obs['type'] == 'high';
+                        return Positioned(
+                          left: obs['x'] as double,
+                          bottom: isHigh ? 75 : 45,
+                          child: Text(
+                            isHigh ? '🦅' : '🌵',
+                            style: const TextStyle(fontSize: 28),
+                          ),
+                        );
+                      }),
+                      // 장애물 힌트
+                      ..._obstacles.map((obs) {
+                        final isHigh = obs['type'] == 'high';
+                        final ox = obs['x'] as double;
+                        if (ox > 50 && ox < 200) {
+                          return Positioned(
+                            left: ox,
+                            bottom: 20,
+                            child: Text(
+                              isHigh ? '숙여!' : '점프!',
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: isHigh ? Colors.blue : Colors.red,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          );
+                        }
+                        return const SizedBox.shrink();
+                      }),
                       // 게임 오버
                       if (_isGameOver)
                         Center(
@@ -210,6 +319,9 @@ class _MiniGameScreenState extends State<MiniGameScreen>
                                         fontSize: 24,
                                         fontWeight: FontWeight.bold)),
                                 Text('점수: $_score'),
+                                if (_score == _highScore && _score > 0)
+                                  const Text('🏆 최고 기록!',
+                                      style: TextStyle(color: Colors.orange)),
                                 const SizedBox(height: 8),
                                 const Text('탭해서 다시 시작',
                                     style: TextStyle(color: Colors.grey)),
@@ -226,16 +338,20 @@ class _MiniGameScreenState extends State<MiniGameScreen>
                               color: Colors.white.withOpacity(0.9),
                               borderRadius: BorderRadius.circular(12),
                             ),
-                            child: const Column(
+                            child: Column(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Text('🐶 점프 게임!',
-                                    style: TextStyle(
+                                Text('${_getPetEmoji()} 점프 게임!',
+                                    style: const TextStyle(
                                         fontSize: 24,
                                         fontWeight: FontWeight.bold)),
-                                SizedBox(height: 8),
-                                Text('탭해서 시작 / 점프',
+                                const SizedBox(height: 8),
+                                const Text('탭 = 점프\n길게 누르기 = 숙이기',
+                                    textAlign: TextAlign.center,
                                     style: TextStyle(color: Colors.grey)),
+                                const SizedBox(height: 4),
+                                const Text('탭해서 시작!',
+                                    style: TextStyle(color: Colors.purple)),
                               ],
                             ),
                           ),
@@ -243,12 +359,6 @@ class _MiniGameScreenState extends State<MiniGameScreen>
                     ],
                   ),
                 ),
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                '탭하면 점프해요!\n갈수록 빨라져요 🏃',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.grey),
               ),
               const SizedBox(height: 24),
               ElevatedButton(
