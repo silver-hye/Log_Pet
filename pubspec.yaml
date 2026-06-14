@@ -1,0 +1,30 @@
+name: flutter_application_1
+description: "LOG-PET Application"
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  path_provider: ^2.1.2
+  cupertino_icons: ^1.0.8
+  audioplayers: ^6.0.0
+  shared_preferences: ^2.2.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/sounds/feed.mp3
+    - assets/sounds/wash.mp3
+    - assets/sounds/happy.mp3
+    - assets/sounds/grow.mp3
+    - assets/sounds/bgm.mp3
+    - assets/sounds/button.mp3
