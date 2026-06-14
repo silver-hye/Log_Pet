@@ -25,7 +25,7 @@ class _NurturingScreenState extends State<NurturingScreen> {
   late PetInstance _pet;
   final _nameController = TextEditingController();
   String _selectedSpecies = '강아지';
-  final List<String> _speciesList = ['강아지', '토끼'];
+  final List<String> _speciesList = ['강아지', '토끼', '고양이', '햄스터'];
   String _message = '';
   final AudioPlayer _audioPlayer = AudioPlayer();
 
@@ -172,21 +172,21 @@ class _NurturingScreenState extends State<NurturingScreen> {
   }
 
   List<Map<String, dynamic>> _getActions() {
-    if (_pet.species == '강아지' || _pet.species == '토끼') {
-      return [
-        {'emoji': '🍖', 'label': '먹이주기\n($_feedCount/2)', 'action': 'feed'},
-        {'emoji': '🛁', 'label': '씻기기\n($_washCount/1)', 'action': 'wash'},
-        {'emoji': '🦮', 'label': '산책\n($_walkCount/2)', 'action': 'walk'},
-      ];
-    } else {
-      return [
-        {'emoji': '🍖', 'label': '먹이주기\n($_feedCount/2)', 'action': 'feed'},
-        {'emoji': '🛁', 'label': '씻기기\n($_washCount/1)', 'action': 'wash'},
-        {'emoji': '🤚', 'label': '쓰다듬기\n($_petCount/2)', 'action': 'pet'},
-      ];
-    }
+  if (_pet.species == '강아지' || _pet.species == '토끼') {
+    return [
+      {'emoji': '🍖', 'label': '먹이주기\n($_feedCount/2)', 'action': 'feed'},
+      {'emoji': '🛁', 'label': '씻기기\n($_washCount/1)', 'action': 'wash'},
+      {'emoji': '🦮', 'label': '산책\n($_walkCount/2)', 'action': 'walk'},
+    ];
+  } else {
+    // 고양이, 햄스터
+    return [
+      {'emoji': '🍖', 'label': '먹이주기\n($_feedCount/2)', 'action': 'feed'},
+      {'emoji': '🛁', 'label': '씻기기\n($_washCount/1)', 'action': 'wash'},
+      {'emoji': '🤚', 'label': '쓰다듬기\n($_petCount/2)', 'action': 'pet'},
+    ];
   }
-
+}
   @override
   void dispose() {
     _audioPlayer.dispose();
